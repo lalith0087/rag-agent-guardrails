@@ -7,6 +7,10 @@ I built the agent loop and guardrail layer by hand, rather than using CrewAI/Lan
 what those frameworks abstract: tool schemas, prompt/tool protocols, budgets, and failure handling.
 The LLM is behind a one-method interface (`chat(messages) -> str`), so any model or framework can sit behind it.
 
+![Demo: indexing, a grounded answer, a blocked injection, a poisoned document and a not-found question](docs/demo.gif)
+
+*Chat UI walkthrough (real captures): indexing, a cited answer, a blocked injection attempt, a poisoned document with the injected sentence stripped, and a question the documents can't answer.*
+
 ## How it works
 
 ```
