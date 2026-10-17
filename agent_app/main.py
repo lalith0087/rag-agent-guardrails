@@ -1,9 +1,11 @@
 """FastAPI service: /ingest documents, then ask the guarded agent via /agent."""
+import os
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .agent import Agent
-from .llm import OllamaLLM
+from .llm import OllamaLLM, default_judge
 from .store import ChromaStore, load_docs
 from .tools import build_tools
 
@@ -14,9 +16,9 @@ _state: dict = {}
 def get_agent() -> Agent:
     """Lazily build the agent so importing the app needs no Ollama/Chroma."""
     if "agent" not in _state:
-        store = ChromaStore()
+        store = ChromaStore(path=os.environ.get("CHROMA_PATH", "./chroma_db"))
         _state["store"] = store
-        _state["agent"] = Agent(OllamaLLM(), build_tools(store))
+        _state["agent"] = Agent(OllamaLLM(), build_tools(store), judge=default_judge() if os.environ.get("ENABLE_JUDGE", "1") == "1" else None)
     return _state["agent"]
 
 

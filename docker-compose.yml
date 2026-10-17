@@ -1,0 +1,39 @@
+# One command: `docker compose up --build`
+# Starts Ollama, pulls the models once, then starts the API on http://localhost:8000
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  model-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull llama3.2:1b && ollama pull nomic-embed-text"]
+    restart: "no"
+
+  api:
+    build: .
+    depends_on:
+      model-pull:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: llama3.2:1b
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/data
+
+volumes:
+  ollama_models:
+  chroma_data:

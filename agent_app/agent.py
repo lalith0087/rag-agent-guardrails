@@ -10,7 +10,8 @@ import json
 from dataclasses import dataclass, field
 
 from .guardrails import (
-    Budget, GuardrailViolation, check_grounding, check_input, validate_tool_call,
+    Budget, GuardrailViolation, check_entailment, check_grounding, check_input, cited_sources,
+    validate_tool_call,
 )
 from .tools import Tool
 
@@ -57,8 +58,9 @@ def _parse(raw: str) -> dict:
 
 
 class Agent:
-    def __init__(self, llm, tools: dict[str, Tool], max_steps: int = 6):
-        self.llm, self.tools, self.max_steps = llm, tools, max_steps
+    def __init__(self, llm, tools: dict[str, Tool], max_steps: int = 6, judge=None):
+        # judge: optional LLM used to verify that cited evidence entails the answer (None = off)
+        self.llm, self.tools, self.max_steps, self.judge = llm, tools, max_steps, judge
 
     def _system_prompt(self) -> str:
         tool_list = "\n".join(f"- {t.name}: {t.description}" for t in self.tools.values())
@@ -81,6 +83,8 @@ class Agent:
         used_calc = False
         nudged = False
         searched = False
+        passages: dict[str, list[str]] = {}  # source -> retrieved text, for the entailment judge
+        original_question = question
         evidence = question  # numbers allowed in the answer: from the question, retrieved text, calculator output
 
         try:
@@ -108,6 +112,10 @@ class Agent:
                         messages.append({"role": "user", "content": "You have not searched the documents yet. Call search_docs first, then answer with [source: file] citations."})
                         continue
                     check_grounding(answer, retrieved, used_calc, evidence)
+                    cited = cited_sources(answer) & retrieved
+                    if self.judge is not None and cited:
+                        cited_text = "\n".join(t for s in sorted(cited) for t in passages[s])
+                        check_entailment(self.judge, original_question, answer, cited_text)
                     result.steps.append({"type": "final"})
                     result.answer = answer
                     return result
@@ -132,6 +140,8 @@ class Agent:
                     searched = True
                     retrieved |= {r["source"] for r in output["results"]}
                     evidence += " " + " ".join(r["text"] for r in output["results"])
+                    for r in output["results"]:
+                        passages.setdefault(r["source"], []).append(r["text"])
                     if output["dropped_untrusted"]:
                         result.notes.append(f"removed {output['dropped_untrusted']} sentence(s) from retrieved text that looked like prompt injection")
                 if name == "calculate":

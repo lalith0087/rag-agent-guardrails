@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from agent_app.agent import Agent  # noqa: E402
-from agent_app.llm import OllamaLLM  # noqa: E402
+from agent_app.llm import OllamaLLM, default_judge  # noqa: E402
 from agent_app.store import ChromaStore, load_docs  # noqa: E402
 from agent_app.tools import build_tools  # noqa: E402
 
@@ -30,8 +30,9 @@ CASES = [
 def main():
     store = ChromaStore(path=tempfile.mkdtemp(), name="eval")
     store.add_documents(load_docs("sample_docs"))
-    agent = Agent(OllamaLLM(), build_tools(store))
-    rows, correct, safe = [], 0, 0
+    use_judge = "--judge" in sys.argv
+    agent = Agent(OllamaLLM(), build_tools(store), judge=default_judge() if use_judge else None)
+    rows, correct, wrong_shipped = [], 0, 0
     for q, expect, blocked in CASES:
         r = agent.run(q)
         if blocked is True:
@@ -43,9 +44,11 @@ def main():
         rows.append({"q": q, "ok": ok, "blocked": r.block_code, "answer": r.answer[:160],
                      "tools": [s.get("tool") for s in r.steps if s["type"] == "tool_call"], "notes": r.notes})
         correct += ok
+        if not ok and not r.blocked and 'not found' not in r.answer.lower():
+            wrong_shipped += 1
         print(("PASS" if ok else "FAIL"), "|", q, "->", r.block_code or r.answer[:90].replace("\n", " "))
-    print(f"\n{correct}/{len(CASES)} passed")
-    Path("eval/results.json").write_text(json.dumps(rows, indent=2))
+    print(f"\n{correct}/{len(CASES)} passed, {wrong_shipped} wrong answer(s) shipped (judge={'on' if use_judge else 'off'})")
+    Path("eval/results_judge.json" if use_judge else "eval/results.json").write_text(json.dumps(rows, indent=2))
 
 
 if __name__ == "__main__":

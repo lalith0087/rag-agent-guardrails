@@ -1,5 +1,6 @@
 """Guardrails around the agent loop: input screening, tool-call validation,
 loop/step budgets, untrusted-content filtering and output grounding."""
+import json
 import re
 from dataclasses import dataclass, field
 
@@ -130,3 +131,33 @@ def check_grounding(answer: str, retrieved_sources: set[str], used_calculator: b
             "unsupported_numbers",
             f"Answer states number(s) {sorted(unsupported)} not found in the retrieved evidence.",
         )
+
+
+JUDGE_SYSTEM = (
+    "You are a strict fact-checker. Given a QUESTION, an ANSWER and the EVIDENCE passages the answer cites, "
+    "decide whether the EVIDENCE directly supports the ANSWER to that QUESTION. Brief answers, missing units "
+    "or different number formatting (1500 vs 1,500) are fine if the evidence states the same fact. Mark NOT supported only "
+    "if the answer contradicts the evidence, says the opposite of it, or states something the evidence does not contain. "
+    'Reply with JSON only: {"supported": true|false, "reason": "<short>"}'
+)
+
+
+def build_judge_messages(question: str, answer: str, evidence: str) -> list[dict]:
+    body = _CITATION_RE.sub("", answer).strip()
+    return [
+        {"role": "system", "content": JUDGE_SYSTEM},
+        {"role": "user", "content": f"QUESTION: {question}\nANSWER: {body}\nEVIDENCE:\n{evidence}"},
+    ]
+
+
+def check_entailment(judge, question: str, answer: str, evidence: str) -> None:
+    """LLM-judge pass: the cited evidence must support the answer. Fails closed on unparseable verdicts."""
+    raw = judge.chat(build_judge_messages(question, answer, evidence))
+    try:
+        verdict = json.loads(raw)
+        supported = verdict["supported"] is True
+        reason = str(verdict.get("reason", ""))[:200]
+    except (ValueError, KeyError, TypeError):
+        raise GuardrailViolation("not_entailed", "Could not verify that the cited evidence supports the answer.")
+    if not supported:
+        raise GuardrailViolation("not_entailed", f"Cited evidence does not support the answer ({reason}).")

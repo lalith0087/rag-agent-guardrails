@@ -15,3 +15,8 @@ class OllamaLLM:
         import ollama
         resp = ollama.chat(model=self.model, messages=messages, format="json", options={"temperature": 0})
         return resp["message"]["content"]
+
+
+def default_judge() -> "OllamaLLM":
+    """Judge model, configurable separately: a different model from the generator avoids shared blind spots."""
+    return OllamaLLM(os.environ.get("OLLAMA_JUDGE_MODEL", "qwen2.5-coder:1.5b"))

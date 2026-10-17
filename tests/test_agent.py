@@ -147,3 +147,47 @@ def test_not_found_path_ignores_model_supplied_text(make_agent):
     ])
     r = agent.run("Hotel cap?")
     assert r.answer == "Not found in the documents." and "5000" not in r.answer
+
+
+def judge(verdict):
+    from .conftest import ScriptedLLM
+    return ScriptedLLM([verdict])
+
+
+def test_judge_blocks_cited_but_unsupported_answer(store):
+    from agent_app.agent import Agent
+    from agent_app.tools import build_tools
+    from .conftest import ScriptedLLM
+    j = judge({"supported": False, "reason": "evidence says receipts ARE required"})
+    llm = ScriptedLLM([tool("search_docs", query="receipts above 300 rupees"),
+                       final("False [source: expense_policy.md]")])
+    r = Agent(llm, build_tools(store), judge=j).run("Are receipts required above 300 rupees?")
+    assert r.blocked and r.block_code == "not_entailed"
+    assert "receipts" in j.seen[0][1]["content"] and "Receipts are required" in j.seen[0][1]["content"]
+
+
+def test_judge_passes_supported_answer(store):
+    from agent_app.agent import Agent
+    from agent_app.tools import build_tools
+    from .conftest import ScriptedLLM
+    llm = ScriptedLLM([tool("search_docs", query="meal allowance"), final("1,500 rupees [source: expense_policy.md]")])
+    r = Agent(llm, build_tools(store), judge=judge({"supported": True, "reason": "ok"})).run("Meal allowance?")
+    assert not r.blocked and "1,500" in r.answer
+
+
+def test_judge_garbage_verdict_fails_closed(store):
+    from agent_app.agent import Agent
+    from agent_app.tools import build_tools
+    from .conftest import ScriptedLLM
+    llm = ScriptedLLM([tool("search_docs", query="meal allowance"), final("1,500 rupees [source: expense_policy.md]")])
+    r = Agent(llm, build_tools(store), judge=judge("not json")).run("Meal allowance?")
+    assert r.blocked and r.block_code == "not_entailed"
+
+
+def test_calculator_only_answer_skips_judge(store):
+    from agent_app.agent import Agent
+    from agent_app.tools import build_tools
+    from .conftest import ScriptedLLM
+    j = ScriptedLLM([])  # would raise IndexError if called
+    llm = ScriptedLLM([tool("calculate", expression="2+2"), final("4")])
+    assert Agent(llm, build_tools(store), judge=j).run("2+2?").answer == "4"

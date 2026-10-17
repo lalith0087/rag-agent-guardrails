@@ -15,3 +15,13 @@ jobs:
       - run: pip install pytest httpx fastapi==0.115.0 pydantic ollama
       - run: pytest -q
       - run: python -m compileall -q agent_app eval
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t guarded-rag-agent .
+      - name: Container starts and /health responds
+        run: |
+          docker run -d --name agent -p 8000:8000 guarded-rag-agent
+          for i in $(seq 1 20); do curl -fs localhost:8000/health && exit 0; sleep 2; done
+          docker logs agent; exit 1
