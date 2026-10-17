@@ -40,6 +40,9 @@ docker compose up --build        # starts Ollama, pulls the models once, then th
 CI builds the image and checks `/health` on every push. I did not have Docker installed locally, so the CI job
 is what verifies the container. Set `ENABLE_JUDGE=0` to turn the entailment judge off.
 
+Then open **http://localhost:8000** for the chat page (click "Index sample docs" once, then ask or try the example chips).
+It shows the answer, an Answered/Blocked badge, guardrail notes and the full step-by-step agent trace.
+
 **Without Docker:**
 
 ```bash
@@ -55,7 +58,7 @@ instructions...") to demonstrate the indirect-injection filter.
 
 ## Tests and evaluation
 
-* **30 offline tests** (`pytest`): a scripted fake LLM and in-memory store exercise every guardrail and the API, with no
+* **31 offline tests** (`pytest`): a scripted fake LLM and in-memory store exercise every guardrail and the API, with no
   Ollama needed. They also run in GitHub Actions CI.
 * **Live eval** (`python eval/run_eval.py [--judge]`, 11 questions, temperature 0, generator `llama3.2:1b`):
 
@@ -81,5 +84,5 @@ than a refusal.
 
 ## Next steps
 
-Try a larger local model as generator and judge, expand the eval set, a chat UI that shows the step trace, and a
+Try a larger local model as generator and judge, expand the eval set, and a
 framework adapter (CrewAI/LangChain) behind the same interface.

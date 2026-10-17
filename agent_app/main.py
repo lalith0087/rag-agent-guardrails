@@ -2,6 +2,7 @@
 import os
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .agent import Agent
@@ -9,6 +10,7 @@ from .llm import OllamaLLM, default_judge
 from .store import ChromaStore, load_docs
 from .tools import build_tools
 
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
 app = FastAPI(title="Guarded RAG Agent")
 _state: dict = {}
 
@@ -28,6 +30,11 @@ class IngestRequest(BaseModel):
 
 class AgentRequest(BaseModel):
     question: str = Field(max_length=5000)
+
+
+@app.get("/")
+def chat_page():
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/health")

@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY agent_app ./agent_app
 COPY sample_docs ./sample_docs
+COPY static ./static
 
 # Run as a non-root user; /data holds the persistent vector store.
 RUN useradd --create-home appuser && mkdir /data && chown appuser /data
