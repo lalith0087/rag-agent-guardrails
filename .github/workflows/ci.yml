@@ -1,0 +1,17 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      # Tests use a scripted fake LLM and in-memory store: no Ollama or Chroma needed.
+      - run: pip install pytest httpx fastapi==0.115.0 pydantic ollama
+      - run: pytest -q
+      - run: python -m compileall -q agent_app eval
